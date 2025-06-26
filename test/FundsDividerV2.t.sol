@@ -57,7 +57,7 @@ contract FundsDividerV2Test is Test {
     address public beneficiary3 = address(0x7);
     
     uint256 public constant PERCENTAGE_BASE = 10000;
-    uint256 public constant DEFAULT_FEE_PERCENTAGE = 300; // 3%
+    uint256 public constant DEFAULT_FEE_PERCENTAGE = 300; // 默认 3%
     
     /// @notice 设置测试环境
     function setUp() public {
@@ -84,7 +84,7 @@ contract FundsDividerV2Test is Test {
     function testInitialization() public {
         assertEq(fundsDivider.admin(), admin);
         assertEq(fundsDivider.feeAddress(), feeAddress);
-        assertEq(fundsDivider.DEFAULT_FEE_PERCENTAGE(), DEFAULT_FEE_PERCENTAGE);
+        assertEq(fundsDivider.feePercentage(), DEFAULT_FEE_PERCENTAGE);
         assertEq(fundsDivider.PERCENTAGE_BASE(), PERCENTAGE_BASE);
     }
     
@@ -107,6 +107,32 @@ contract FundsDividerV2Test is Test {
         vm.prank(newAdmin);
         fundsDivider.updateFeeAddress(newFeeAddress);
         assertEq(fundsDivider.feeAddress(), newFeeAddress);
+    }
+    
+    /// @notice 测试手续费百分比更新
+    function testUpdateFeePercentage() public {
+        uint256 newFeePercentage = 500; // 5%
+        
+        vm.prank(admin);
+        vm.expectEmit(false, false, false, true);
+        emit FundsDividerV2.FeePercentageUpdated(DEFAULT_FEE_PERCENTAGE, newFeePercentage);
+        
+        fundsDivider.updateFeePercentage(newFeePercentage);
+        assertEq(fundsDivider.feePercentage(), newFeePercentage);
+    }
+    
+    /// @notice 测试手续费百分比更新权限
+    function testUpdateFeePercentageUnauthorized() public {
+        vm.prank(user);
+        vm.expectRevert(FundsDividerV2.Unauthorized.selector);
+        fundsDivider.updateFeePercentage(500);
+    }
+    
+    /// @notice 测试无效手续费百分比
+    function testUpdateFeePercentageInvalid() public {
+        vm.prank(admin);
+        vm.expectRevert(FundsDividerV2.InvalidFeePercentage.selector);
+        fundsDivider.updateFeePercentage(10001); // 超过 100%
     }
     
     /// @notice 测试受益人列表设置
@@ -390,18 +416,22 @@ contract FundsDividerV2Test is Test {
         assertEq(beneficiaryDistributions[0].amount, expectedFeeAmount);
         assertTrue(beneficiaryDistributions[0].isDefault);
         
+        uint256 expectedBeneficiary1Amount = (remainingAfterFee * 3000) / PERCENTAGE_BASE;
+        uint256 expectedBeneficiary2Amount = (remainingAfterFee * 2000) / PERCENTAGE_BASE;
+        uint256 expectedDestAmount = remainingAfterFee - expectedBeneficiary1Amount - expectedBeneficiary2Amount;
+
         // 验证受益人分配（从剩余97%中分配）
         assertEq(beneficiaryDistributions[1].recipient, beneficiary1);
-        assertEq(beneficiaryDistributions[1].amount, (remainingAfterFee * 3000) / PERCENTAGE_BASE); // 30% of 97%
+        assertEq(beneficiaryDistributions[1].amount, expectedBeneficiary1Amount); // 30% of 97%
         assertTrue(!beneficiaryDistributions[1].isDefault);
         
         assertEq(beneficiaryDistributions[2].recipient, beneficiary2);
-        assertEq(beneficiaryDistributions[2].amount, (remainingAfterFee * 2000) / PERCENTAGE_BASE); // 20% of 97%
+        assertEq(beneficiaryDistributions[2].amount, expectedBeneficiary2Amount); // 20% of 97%
         assertTrue(!beneficiaryDistributions[2].isDefault);
         
         // 验证目标地址剩余分配
         assertEq(beneficiaryDistributions[3].recipient, destAddress);
-        assertEq(beneficiaryDistributions[3].amount, (remainingAfterFee * 5000) / PERCENTAGE_BASE); // 剩余 50% of 97%
+        assertEq(beneficiaryDistributions[3].amount, expectedDestAmount); // 剩余 50% of 97%
         assertTrue(beneficiaryDistributions[3].isDefault);
     }
     
@@ -491,7 +521,7 @@ contract FundsDividerV2Test is Test {
         uint256 expectedBeneficiary1Amount = (remainingAfterFee * 3500) / PERCENTAGE_BASE; // 35% of 97%
         uint256 expectedBeneficiary2Amount = (remainingAfterFee * 2500) / PERCENTAGE_BASE; // 25% of 97%
         uint256 expectedBeneficiary3Amount = (remainingAfterFee * 2500) / PERCENTAGE_BASE; // 25% of 97%
-        uint256 expectedDestAmount = (remainingAfterFee * 1500) / PERCENTAGE_BASE; // 15% of 97% (剩余部分)
+        uint256 expectedDestAmount = remainingAfterFee - expectedBeneficiary1Amount - expectedBeneficiary2Amount - expectedBeneficiary3Amount;
         
         assertEq(feeAddress.balance, feeAddressBalanceBefore + expectedFeeAmount);
         assertEq(beneficiary1.balance, beneficiary1BalanceBefore + expectedBeneficiary1Amount);
