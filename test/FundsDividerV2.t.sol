@@ -215,6 +215,7 @@ contract FundsDividerV2Test is Test {
     /// @notice 测试使用受益人列表的 ETH 转账分配
     function testNativeTransferWithBeneficiaryList() public {
         // 设置受益人列表：beneficiary1 20%, beneficiary2 30%，剩余 50% 给目标地址
+        // 但是要先扣除 3% 手续费，所以实际分配是从 97% 中按比例分配
         FundsDividerV2.Beneficiary[] memory beneficiaries = new FundsDividerV2.Beneficiary[](2);
         beneficiaries[0] = FundsDividerV2.Beneficiary({
             beneficiary: beneficiary1,
@@ -229,10 +230,13 @@ contract FundsDividerV2Test is Test {
         fundsDivider.setBeneficiaryList(destAddress, beneficiaries);
         
         uint256 transferAmount = 1 ether;
-        uint256 expectedBeneficiary1Amount = (transferAmount * 2000) / PERCENTAGE_BASE; // 0.2 ETH
-        uint256 expectedBeneficiary2Amount = (transferAmount * 3000) / PERCENTAGE_BASE; // 0.3 ETH
-        uint256 expectedDestAmount = transferAmount - expectedBeneficiary1Amount - expectedBeneficiary2Amount; // 0.5 ETH
+        uint256 expectedFeeAmount = (transferAmount * DEFAULT_FEE_PERCENTAGE) / PERCENTAGE_BASE; // 3%
+        uint256 remainingAfterFee = transferAmount - expectedFeeAmount; // 97%
+        uint256 expectedBeneficiary1Amount = (remainingAfterFee * 2000) / PERCENTAGE_BASE; // 20% of 97%
+        uint256 expectedBeneficiary2Amount = (remainingAfterFee * 3000) / PERCENTAGE_BASE; // 30% of 97%
+        uint256 expectedDestAmount = remainingAfterFee - expectedBeneficiary1Amount - expectedBeneficiary2Amount; // 50% of 97%
         
+        uint256 feeAddressBalanceBefore = feeAddress.balance;
         uint256 beneficiary1BalanceBefore = beneficiary1.balance;
         uint256 beneficiary2BalanceBefore = beneficiary2.balance;
         uint256 destAddressBalanceBefore = destAddress.balance;
@@ -242,6 +246,7 @@ contract FundsDividerV2Test is Test {
         fundsDivider.divideNativeTransfer{value: transferAmount}(destAddress);
         
         // 验证余额变化
+        assertEq(feeAddress.balance, feeAddressBalanceBefore + expectedFeeAmount);
         assertEq(beneficiary1.balance, beneficiary1BalanceBefore + expectedBeneficiary1Amount);
         assertEq(beneficiary2.balance, beneficiary2BalanceBefore + expectedBeneficiary2Amount);
         assertEq(destAddress.balance, destAddressBalanceBefore + expectedDestAmount);
@@ -250,6 +255,7 @@ contract FundsDividerV2Test is Test {
     /// @notice 测试 100% 分配给受益人的情况
     function testNativeTransferFullBeneficiaryAllocation() public {
         // 设置受益人列表：beneficiary1 60%, beneficiary2 40%，总计 100%
+        // 先扣除 3% 手续费，然后从剩余 97% 中按 100% 分配给受益人
         FundsDividerV2.Beneficiary[] memory beneficiaries = new FundsDividerV2.Beneficiary[](2);
         beneficiaries[0] = FundsDividerV2.Beneficiary({
             beneficiary: beneficiary1,
@@ -264,9 +270,12 @@ contract FundsDividerV2Test is Test {
         fundsDivider.setBeneficiaryList(destAddress, beneficiaries);
         
         uint256 transferAmount = 1 ether;
-        uint256 expectedBeneficiary1Amount = (transferAmount * 6000) / PERCENTAGE_BASE; // 0.6 ETH
-        uint256 expectedBeneficiary2Amount = (transferAmount * 4000) / PERCENTAGE_BASE; // 0.4 ETH
+        uint256 expectedFeeAmount = (transferAmount * DEFAULT_FEE_PERCENTAGE) / PERCENTAGE_BASE; // 3%
+        uint256 remainingAfterFee = transferAmount - expectedFeeAmount; // 97%
+        uint256 expectedBeneficiary1Amount = (remainingAfterFee * 6000) / PERCENTAGE_BASE; // 60% of 97%
+        uint256 expectedBeneficiary2Amount = (remainingAfterFee * 4000) / PERCENTAGE_BASE; // 40% of 97%
         
+        uint256 feeAddressBalanceBefore = feeAddress.balance;
         uint256 beneficiary1BalanceBefore = beneficiary1.balance;
         uint256 beneficiary2BalanceBefore = beneficiary2.balance;
         uint256 destAddressBalanceBefore = destAddress.balance;
@@ -276,9 +285,10 @@ contract FundsDividerV2Test is Test {
         fundsDivider.divideNativeTransfer{value: transferAmount}(destAddress);
         
         // 验证余额变化
+        assertEq(feeAddress.balance, feeAddressBalanceBefore + expectedFeeAmount);
         assertEq(beneficiary1.balance, beneficiary1BalanceBefore + expectedBeneficiary1Amount);
         assertEq(beneficiary2.balance, beneficiary2BalanceBefore + expectedBeneficiary2Amount);
-        assertEq(destAddress.balance, destAddressBalanceBefore); // 目标地址不应收到任何资金
+        assertEq(destAddress.balance, destAddressBalanceBefore); // 目标地址不应收到任何资金（因为受益人分配了100%）
     }
     
     /// @notice 测试默认手续费的 ERC20 代币转账分配
@@ -316,22 +326,29 @@ contract FundsDividerV2Test is Test {
         fundsDivider.setBeneficiaryList(destAddress, beneficiaries);
         
         uint256 transferAmount = 1000 * 10**18;
-        uint256 expectedBeneficiary1Amount = (transferAmount * 2500) / PERCENTAGE_BASE; // 25%
-        uint256 expectedBeneficiary2Amount = (transferAmount * 2500) / PERCENTAGE_BASE; // 25%
-        uint256 expectedDestAmount = transferAmount - expectedBeneficiary1Amount - expectedBeneficiary2Amount; // 50%
+        uint256 expectedFeeAmount = (transferAmount * DEFAULT_FEE_PERCENTAGE) / PERCENTAGE_BASE; // 3%
+        uint256 remainingAfterFee = transferAmount - expectedFeeAmount; // 97%
+        uint256 expectedBeneficiary1Amount = (remainingAfterFee * 2500) / PERCENTAGE_BASE; // 25% of 97%
+        uint256 expectedBeneficiary2Amount = (remainingAfterFee * 2500) / PERCENTAGE_BASE; // 25% of 97%
+        uint256 expectedDestAmount = remainingAfterFee - expectedBeneficiary1Amount - expectedBeneficiary2Amount; // 50% of 97%
         
+        uint256 feeAddressBalanceBefore = mockToken.balanceOf(feeAddress);
         uint256 beneficiary1BalanceBefore = mockToken.balanceOf(beneficiary1);
         uint256 beneficiary2BalanceBefore = mockToken.balanceOf(beneficiary2);
         uint256 destAddressBalanceBefore = mockToken.balanceOf(destAddress);
+        uint256 userBalanceBefore = mockToken.balanceOf(user);
         
         // 执行代币转账
         vm.prank(user);
         fundsDivider.divideERC20Transfer(address(mockToken), destAddress, transferAmount);
         
         // 验证余额变化
+        assertEq(mockToken.balanceOf(feeAddress), feeAddressBalanceBefore + expectedFeeAmount);
         assertEq(mockToken.balanceOf(beneficiary1), beneficiary1BalanceBefore + expectedBeneficiary1Amount);
         assertEq(mockToken.balanceOf(beneficiary2), beneficiary2BalanceBefore + expectedBeneficiary2Amount);
         assertEq(mockToken.balanceOf(destAddress), destAddressBalanceBefore + expectedDestAmount);
+        assertEq(mockToken.balanceOf(user), userBalanceBefore - transferAmount);
+        assertEq(mockToken.balanceOf(address(fundsDivider)), 0);
     }
     
     /// @notice 测试分配金额计算功能
@@ -363,21 +380,29 @@ contract FundsDividerV2Test is Test {
         fundsDivider.setBeneficiaryList(destAddress, beneficiaries);
         
         FundsDividerV2.Distribution[] memory beneficiaryDistributions = fundsDivider.calculateDistributions(destAddress, totalAmount);
-        assertEq(beneficiaryDistributions.length, 3); // 2 受益人 + 1 目标地址
+        assertEq(beneficiaryDistributions.length, 4); // 手续费 + 2 受益人 + 1 目标地址
         
-        // 验证受益人分配
-        assertEq(beneficiaryDistributions[0].recipient, beneficiary1);
-        assertEq(beneficiaryDistributions[0].amount, (totalAmount * 3000) / PERCENTAGE_BASE);
-        assertTrue(!beneficiaryDistributions[0].isDefault);
+        uint256 expectedFeeAmount = (totalAmount * DEFAULT_FEE_PERCENTAGE) / PERCENTAGE_BASE; // 3%
+        uint256 remainingAfterFee = totalAmount - expectedFeeAmount; // 97%
         
-        assertEq(beneficiaryDistributions[1].recipient, beneficiary2);
-        assertEq(beneficiaryDistributions[1].amount, (totalAmount * 2000) / PERCENTAGE_BASE);
+        // 验证手续费分配
+        assertEq(beneficiaryDistributions[0].recipient, feeAddress);
+        assertEq(beneficiaryDistributions[0].amount, expectedFeeAmount);
+        assertTrue(beneficiaryDistributions[0].isDefault);
+        
+        // 验证受益人分配（从剩余97%中分配）
+        assertEq(beneficiaryDistributions[1].recipient, beneficiary1);
+        assertEq(beneficiaryDistributions[1].amount, (remainingAfterFee * 3000) / PERCENTAGE_BASE); // 30% of 97%
         assertTrue(!beneficiaryDistributions[1].isDefault);
         
+        assertEq(beneficiaryDistributions[2].recipient, beneficiary2);
+        assertEq(beneficiaryDistributions[2].amount, (remainingAfterFee * 2000) / PERCENTAGE_BASE); // 20% of 97%
+        assertTrue(!beneficiaryDistributions[2].isDefault);
+        
         // 验证目标地址剩余分配
-        assertEq(beneficiaryDistributions[2].recipient, destAddress);
-        assertEq(beneficiaryDistributions[2].amount, (totalAmount * 5000) / PERCENTAGE_BASE); // 剩余 50%
-        assertTrue(beneficiaryDistributions[2].isDefault);
+        assertEq(beneficiaryDistributions[3].recipient, destAddress);
+        assertEq(beneficiaryDistributions[3].amount, (remainingAfterFee * 5000) / PERCENTAGE_BASE); // 剩余 50% of 97%
+        assertTrue(beneficiaryDistributions[3].isDefault);
     }
     
     /// @notice 测试错误条件
@@ -450,6 +475,7 @@ contract FundsDividerV2Test is Test {
         
         uint256 transferAmount = 2 ether;
         
+        uint256 feeAddressBalanceBefore = feeAddress.balance;
         uint256 beneficiary1BalanceBefore = beneficiary1.balance;
         uint256 beneficiary2BalanceBefore = beneficiary2.balance;
         uint256 beneficiary3BalanceBefore = beneficiary3.balance;
@@ -459,19 +485,22 @@ contract FundsDividerV2Test is Test {
         vm.prank(user);
         fundsDivider.divideNativeTransfer{value: transferAmount}(destAddress);
         
-        // 验证分配结果
-        uint256 expectedBeneficiary1Amount = (transferAmount * 3500) / PERCENTAGE_BASE; // 0.7 ETH
-        uint256 expectedBeneficiary2Amount = (transferAmount * 2500) / PERCENTAGE_BASE; // 0.5 ETH
-        uint256 expectedBeneficiary3Amount = (transferAmount * 2500) / PERCENTAGE_BASE; // 0.5 ETH
-        uint256 expectedDestAmount = (transferAmount * 1500) / PERCENTAGE_BASE; // 0.3 ETH (剩余 15%)
+        // 验证分配结果：先扣除3%手续费，然后从剩余97%中按比例分配
+        uint256 expectedFeeAmount = (transferAmount * DEFAULT_FEE_PERCENTAGE) / PERCENTAGE_BASE; // 3%
+        uint256 remainingAfterFee = transferAmount - expectedFeeAmount; // 97%
+        uint256 expectedBeneficiary1Amount = (remainingAfterFee * 3500) / PERCENTAGE_BASE; // 35% of 97%
+        uint256 expectedBeneficiary2Amount = (remainingAfterFee * 2500) / PERCENTAGE_BASE; // 25% of 97%
+        uint256 expectedBeneficiary3Amount = (remainingAfterFee * 2500) / PERCENTAGE_BASE; // 25% of 97%
+        uint256 expectedDestAmount = (remainingAfterFee * 1500) / PERCENTAGE_BASE; // 15% of 97% (剩余部分)
         
+        assertEq(feeAddress.balance, feeAddressBalanceBefore + expectedFeeAmount);
         assertEq(beneficiary1.balance, beneficiary1BalanceBefore + expectedBeneficiary1Amount);
         assertEq(beneficiary2.balance, beneficiary2BalanceBefore + expectedBeneficiary2Amount);
         assertEq(beneficiary3.balance, beneficiary3BalanceBefore + expectedBeneficiary3Amount);
         assertEq(destAddress.balance, destAddressBalanceBefore + expectedDestAmount);
         
         // 验证总金额守恒
-        uint256 totalDistributed = expectedBeneficiary1Amount + expectedBeneficiary2Amount + 
+        uint256 totalDistributed = expectedFeeAmount + expectedBeneficiary1Amount + expectedBeneficiary2Amount + 
                                   expectedBeneficiary3Amount + expectedDestAmount;
         assertEq(totalDistributed, transferAmount);
     }

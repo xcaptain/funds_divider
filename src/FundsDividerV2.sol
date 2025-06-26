@@ -295,26 +295,43 @@ contract FundsDividerV2 {
     ) internal returns (Distribution[] memory distributions) {
         Beneficiary[] memory beneficiaries = beneficiaryLists[destAddress];
         
+        // 先计算并分配手续费（3%）
+        uint256 feeAmount = (totalAmount * DEFAULT_FEE_PERCENTAGE) / PERCENTAGE_BASE;
+        uint256 remainingAfterFee = totalAmount - feeAmount;
+        
         // 计算受益人分配的总百分比
         uint256 beneficiaryTotalPercentage = 0;
         for (uint256 i = 0; i < beneficiaries.length; i++) {
             beneficiaryTotalPercentage += beneficiaries[i].percentage;
         }
         
-        // 创建分配数组
-        uint256 distributionCount = beneficiaries.length;
+        // 创建分配数组：手续费 + 受益人 + 可能的目标地址剩余
+        uint256 distributionCount = 1 + beneficiaries.length; // 手续费 + 受益人
         if (beneficiaryTotalPercentage < PERCENTAGE_BASE) {
             distributionCount++; // 为目标地址添加剩余金额
         }
         
         distributions = new Distribution[](distributionCount);
-        
-        uint256 distributedAmount = 0;
         uint256 index = 0;
         
-        // 分配给受益人
+        // 1. 先分配手续费
+        distributions[index] = Distribution({
+            recipient: feeAddress,
+            amount: feeAmount,
+            isDefault: true
+        });
+        
+        if (isNative) {
+            (bool feeSuccess, ) = feeAddress.call{value: feeAmount}("");
+            if (!feeSuccess) revert TransferFailed();
+        }
+        index++;
+        
+        uint256 distributedFromRemaining = 0;
+        
+        // 2. 从剩余金额中按比例分配给受益人
         for (uint256 i = 0; i < beneficiaries.length; i++) {
-            uint256 beneficiaryAmount = (totalAmount * beneficiaries[i].percentage) / PERCENTAGE_BASE;
+            uint256 beneficiaryAmount = (remainingAfterFee * beneficiaries[i].percentage) / PERCENTAGE_BASE;
             distributions[index] = Distribution({
                 recipient: beneficiaries[i].beneficiary,
                 amount: beneficiaryAmount,
@@ -326,21 +343,21 @@ contract FundsDividerV2 {
                 if (!success) revert TransferFailed();
             }
             
-            distributedAmount += beneficiaryAmount;
+            distributedFromRemaining += beneficiaryAmount;
             index++;
         }
         
-        // 如果有剩余金额，分配给目标地址
+        // 3. 如果受益人总比例小于100%，剩余部分分配给目标地址
         if (beneficiaryTotalPercentage < PERCENTAGE_BASE) {
-            uint256 remainingAmount = totalAmount - distributedAmount;
+            uint256 finalRemainingAmount = remainingAfterFee - distributedFromRemaining;
             distributions[index] = Distribution({
                 recipient: destAddress,
-                amount: remainingAmount,
+                amount: finalRemainingAmount,
                 isDefault: true
             });
             
             if (isNative) {
-                (bool success, ) = destAddress.call{value: remainingAmount}("");
+                (bool success, ) = destAddress.call{value: finalRemainingAmount}("");
                 if (!success) revert TransferFailed();
             }
         }
@@ -409,41 +426,53 @@ contract FundsDividerV2 {
     ) internal view returns (Distribution[] memory distributions) {
         Beneficiary[] memory beneficiaries = beneficiaryLists[destAddress];
         
+        // 先计算手续费（3%）
+        uint256 feeAmount = (totalAmount * DEFAULT_FEE_PERCENTAGE) / PERCENTAGE_BASE;
+        uint256 remainingAfterFee = totalAmount - feeAmount;
+        
         // 计算受益人分配的总百分比
         uint256 beneficiaryTotalPercentage = 0;
         for (uint256 i = 0; i < beneficiaries.length; i++) {
             beneficiaryTotalPercentage += beneficiaries[i].percentage;
         }
         
-        // 创建分配数组
-        uint256 distributionCount = beneficiaries.length;
+        // 创建分配数组：手续费 + 受益人 + 可能的目标地址剩余
+        uint256 distributionCount = 1 + beneficiaries.length; // 手续费 + 受益人
         if (beneficiaryTotalPercentage < PERCENTAGE_BASE) {
             distributionCount++; // 为目标地址添加剩余金额
         }
         
         distributions = new Distribution[](distributionCount);
-        
-        uint256 distributedAmount = 0;
         uint256 index = 0;
         
-        // 计算受益人分配
+        // 1. 手续费分配
+        distributions[index] = Distribution({
+            recipient: feeAddress,
+            amount: feeAmount,
+            isDefault: true
+        });
+        index++;
+        
+        uint256 distributedFromRemaining = 0;
+        
+        // 2. 从剩余金额中按比例分配给受益人
         for (uint256 i = 0; i < beneficiaries.length; i++) {
-            uint256 beneficiaryAmount = (totalAmount * beneficiaries[i].percentage) / PERCENTAGE_BASE;
+            uint256 beneficiaryAmount = (remainingAfterFee * beneficiaries[i].percentage) / PERCENTAGE_BASE;
             distributions[index] = Distribution({
                 recipient: beneficiaries[i].beneficiary,
                 amount: beneficiaryAmount,
                 isDefault: false
             });
-            distributedAmount += beneficiaryAmount;
+            distributedFromRemaining += beneficiaryAmount;
             index++;
         }
         
-        // 如果有剩余金额，分配给目标地址
+        // 3. 如果受益人总比例小于100%，剩余部分分配给目标地址
         if (beneficiaryTotalPercentage < PERCENTAGE_BASE) {
-            uint256 remainingAmount = totalAmount - distributedAmount;
+            uint256 finalRemainingAmount = remainingAfterFee - distributedFromRemaining;
             distributions[index] = Distribution({
                 recipient: destAddress,
-                amount: remainingAmount,
+                amount: finalRemainingAmount,
                 isDefault: true
             });
         }
