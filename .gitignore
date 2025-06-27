@@ -1,2 +1,17 @@
 cache/
 out/
+
+.env
+
+!/broadcast
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+/broadcast/*/11155111/
+/broadcast/*/80001/
+/broadcast/*/1287/
+/broadcast/*/245022926/
+/broadcast/*/3441006/
+/broadcast/*/1313161555/
+/broadcast/*/5003/
+/broadcast/*/534351/
+/broadcast/*/168587773/
