@@ -1,27 +1,31 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.13;
 
-import "forge-std/Test.sol";
-import "../src/FundsDivider.sol";
+import {Test, console} from "forge-std/Test.sol";
+import {IntuipayFundsDivider} from "../src/IntuipayFundsDivider.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 // Mock ERC20 token for testing
-contract MockERC20 {
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
+contract MockERC20 is IERC20 {
+    mapping(address => uint256) public override balanceOf;
+    mapping(address => mapping(address => uint256)) public override allowance;
 
     string public name = "Mock Token";
     string public symbol = "MOCK";
     uint8 public decimals = 18;
-    uint256 public totalSupply = 1000000 * 10 ** 18;
+    uint256 public override totalSupply;
 
     constructor() {
+        totalSupply = 1000000 * 10 ** 18;
         balanceOf[msg.sender] = totalSupply;
     }
 
-    function transfer(address to, uint256 amount) external returns (bool) {
+    function transfer(address to, uint256 amount) external override returns (bool) {
         require(balanceOf[msg.sender] >= amount, "Insufficient balance");
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
+        emit Transfer(msg.sender, to, amount);
         return true;
     }
 
@@ -29,7 +33,7 @@ contract MockERC20 {
         address from,
         address to,
         uint256 amount
-    ) external returns (bool) {
+    ) external override returns (bool) {
         require(balanceOf[from] >= amount, "Insufficient balance");
         require(
             allowance[from][msg.sender] >= amount,
@@ -39,31 +43,64 @@ contract MockERC20 {
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         allowance[from][msg.sender] -= amount;
+        emit Transfer(from, to, amount);
         return true;
     }
 
-    function approve(address spender, uint256 amount) external returns (bool) {
+    function approve(address spender, uint256 amount) external override returns (bool) {
         allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
         return true;
     }
 
     function mint(address to, uint256 amount) external {
         balanceOf[to] += amount;
         totalSupply += amount;
+        emit Transfer(address(0), to, amount);
     }
 }
 
-contract FundsDividerTest is Test {
-    FundsDivider public fundsDivider;
+contract IntuipayFundsDividerTest is Test {
+    IntuipayFundsDivider public fundsDivider;
     MockERC20 public mockToken;
 
-    address public admin = address(0x1);
+    address public owner = address(0x1);
     address public feeAddress = address(0x2);
     address public destAddress = address(0x3);
     address public user = address(0x4);
 
+    // Events for testing
+    event NativeTransfer(
+        address indexed from,
+        address indexed to,
+        uint256 totalAmount,
+        uint256 feeAmount,
+        uint256 destAmount
+    );
+    event ERC20Transfer(
+        address indexed token,
+        address indexed from,
+        address indexed to,
+        uint256 totalAmount,
+        uint256 feeAmount,
+        uint256 destAmount
+    );
+    event FeeAddressUpdated(
+        address indexed oldFeeAddress,
+        address indexed newFeeAddress
+    );
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
+    event FeePercentageUpdated(
+        uint256 oldFeePercentage,
+        uint256 newFeePercentage
+    );
+
     function setUp() public {
-        fundsDivider = new FundsDivider(admin, feeAddress);
+        vm.prank(owner);
+        fundsDivider = new IntuipayFundsDivider(owner, feeAddress);
         mockToken = new MockERC20();
 
         // Give some ETH to test addresses
@@ -76,45 +113,41 @@ contract FundsDividerTest is Test {
     }
 
     function testConstructor() public {
-        assertEq(fundsDivider.admin(), admin);
+        assertEq(fundsDivider.owner(), owner);
         assertEq(fundsDivider.feeAddress(), feeAddress);
-        assertEq(fundsDivider.feePercentage(), 300); // 默认 3%
+        assertEq(fundsDivider.feePercentage(), 300); // Default 3%
         assertEq(fundsDivider.PERCENTAGE_BASE(), 10000);
     }
 
-    function testConstructorWithZeroAdminAddress() public {
-        vm.expectRevert(FundsDivider.InvalidAddress.selector);
-        new FundsDivider(address(0), feeAddress);
-    }
-
     function testConstructorWithZeroFeeAddress() public {
-        vm.expectRevert(FundsDivider.InvalidAddress.selector);
-        new FundsDivider(admin, address(0));
+        vm.prank(owner);
+        vm.expectRevert(IntuipayFundsDivider.InvalidAddress.selector);
+        new IntuipayFundsDivider(owner, address(0));
     }
 
-    function testUpdateAdmin() public {
-        address newAdmin = address(0x5);
+    function testTransferOwnership() public {
+        address newOwner = address(0x5);
 
-        vm.prank(admin);
-        vm.expectEmit(true, true, false, true);
-        emit AdminUpdated(admin, newAdmin);
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit OwnershipTransferred(owner, newOwner);
 
-        fundsDivider.updateAdmin(newAdmin);
-        assertEq(fundsDivider.admin(), newAdmin);
+        fundsDivider.transferOwnership(newOwner);
+        assertEq(fundsDivider.owner(), newOwner);
     }
 
-    function testUpdateAdminUnauthorized() public {
-        address newAdmin = address(0x5);
+    function testTransferOwnershipUnauthorized() public {
+        address newOwner = address(0x5);
 
         vm.prank(user);
-        vm.expectRevert(FundsDivider.Unauthorized.selector);
-        fundsDivider.updateAdmin(newAdmin);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
+        fundsDivider.transferOwnership(newOwner);
     }
 
     function testUpdateFeeAddress() public {
         address newFeeAddress = address(0x5);
 
-        vm.prank(admin);
+        vm.prank(owner);
         vm.expectEmit(true, true, false, true);
         emit FeeAddressUpdated(feeAddress, newFeeAddress);
 
@@ -126,14 +159,14 @@ contract FundsDividerTest is Test {
         address newFeeAddress = address(0x5);
 
         vm.prank(user);
-        vm.expectRevert(FundsDivider.Unauthorized.selector);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
         fundsDivider.updateFeeAddress(newFeeAddress);
     }
 
     function testUpdateFeePercentage() public {
         uint256 newFeePercentage = 500; // 5%
 
-        vm.prank(admin);
+        vm.prank(owner);
         vm.expectEmit(false, false, false, true);
         emit FeePercentageUpdated(300, newFeePercentage);
 
@@ -142,22 +175,22 @@ contract FundsDividerTest is Test {
     }
 
     function testUpdateFeePercentageInvalid() public {
-        uint256 invalidFeePercentage = 10001; // 超过 100%
+        uint256 invalidFeePercentage = 10001; // > 100%
 
-        vm.prank(admin);
-        vm.expectRevert(FundsDivider.InvalidFeePercentage.selector);
+        vm.prank(owner);
+        vm.expectRevert(IntuipayFundsDivider.InvalidFeePercentage.selector);
         fundsDivider.updateFeePercentage(invalidFeePercentage);
     }
 
     function testUpdateFeePercentageUnauthorized() public {
         vm.prank(user);
-        vm.expectRevert(FundsDivider.Unauthorized.selector);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
         fundsDivider.updateFeePercentage(500);
     }
 
     function testUpdateFeeAddressWithZeroAddress() public {
-        vm.prank(admin);
-        vm.expectRevert(FundsDivider.InvalidAddress.selector);
+        vm.prank(owner);
+        vm.expectRevert(IntuipayFundsDivider.InvalidAddress.selector);
         fundsDivider.updateFeeAddress(address(0));
     }
 
@@ -188,13 +221,13 @@ contract FundsDividerTest is Test {
 
     function testNativeTransferWithZeroAmount() public {
         vm.prank(user);
-        vm.expectRevert(FundsDivider.InvalidAmount.selector);
+        vm.expectRevert(IntuipayFundsDivider.InvalidAmount.selector);
         fundsDivider.divideNativeTransfer{value: 0}(destAddress);
     }
 
     function testNativeTransferWithZeroDestAddress() public {
         vm.prank(user);
-        vm.expectRevert(FundsDivider.InvalidAddress.selector);
+        vm.expectRevert(IntuipayFundsDivider.InvalidAddress.selector);
         fundsDivider.divideNativeTransfer{value: 1 ether}(address(0));
     }
 
@@ -247,7 +280,7 @@ contract FundsDividerTest is Test {
         mockToken.approve(address(fundsDivider), transferAmount);
 
         vm.prank(user);
-        vm.expectRevert(FundsDivider.InsufficientBalance.selector);
+        vm.expectRevert(IntuipayFundsDivider.InsufficientBalance.selector);
         fundsDivider.divideERC20Transfer(
             address(mockToken),
             destAddress,
@@ -257,19 +290,19 @@ contract FundsDividerTest is Test {
 
     function testERC20TransferWithZeroAmount() public {
         vm.prank(user);
-        vm.expectRevert(FundsDivider.InvalidAmount.selector);
+        vm.expectRevert(IntuipayFundsDivider.InvalidAmount.selector);
         fundsDivider.divideERC20Transfer(address(mockToken), destAddress, 0);
     }
 
     function testERC20TransferWithZeroTokenAddress() public {
         vm.prank(user);
-        vm.expectRevert(FundsDivider.InvalidAddress.selector);
+        vm.expectRevert(IntuipayFundsDivider.InvalidAddress.selector);
         fundsDivider.divideERC20Transfer(address(0), destAddress, 100);
     }
 
     function testERC20TransferWithZeroDestAddress() public {
         vm.prank(user);
-        vm.expectRevert(FundsDivider.InvalidAddress.selector);
+        vm.expectRevert(IntuipayFundsDivider.InvalidAddress.selector);
         fundsDivider.divideERC20Transfer(address(mockToken), address(0), 100);
     }
 
@@ -300,33 +333,7 @@ contract FundsDividerTest is Test {
         // Test edge case with small amount
         (uint256 feeAmount3, uint256 destAmount3) = fundsDivider
             .calculateAmounts(33);
-        assertEq(feeAmount3, 0); // 33 * 3 * 100 / 100 = 0 (integer division)
+        assertEq(feeAmount3, 0); // 33 * 300 / 10000 = 0 (integer division)
         assertEq(destAmount3, 33);
     }
-
-    // Events for testing
-    event NativeTransfer(
-        address indexed from,
-        address indexed to,
-        uint256 totalAmount,
-        uint256 feeAmount,
-        uint256 destAmount
-    );
-    event ERC20Transfer(
-        address indexed token,
-        address indexed from,
-        address indexed to,
-        uint256 totalAmount,
-        uint256 feeAmount,
-        uint256 destAmount
-    );
-    event FeeAddressUpdated(
-        address indexed oldFeeAddress,
-        address indexed newFeeAddress
-    );
-    event AdminUpdated(address indexed oldAdmin, address indexed newAdmin);
-    event FeePercentageUpdated(
-        uint256 oldFeePercentage,
-        uint256 newFeePercentage
-    );
 }
