@@ -482,4 +482,64 @@ contract CrowdFundingTest is Test {
         vm.expectRevert(CrowdFunding.InvalidTokenAddress.selector);
         crowdFunding.contributeERC20(campaignId, 50 * 10**18);
     }
+    
+    function test_RevertContributeAfterGoalReached() public {
+        // Create campaign
+        vm.prank(owner);
+        uint256 campaignId = crowdFunding.createCampaign(
+            "Test Campaign",
+            "Test Description",
+            beneficiary,
+            1 ether,
+            30,
+            address(0)
+        );
+        
+        // Contribute exactly the funding goal
+        vm.deal(contributor1, 1 ether);
+        vm.prank(contributor1);
+        crowdFunding.contribute{value: 1 ether}(campaignId);
+        
+        // Verify campaign is successful
+        (,,,,,,,CrowdFunding.CampaignStatus status,) = crowdFunding.getCampaignDetails(campaignId);
+        assertEq(uint256(status), uint256(CrowdFunding.CampaignStatus.Successful));
+        
+        // Try to contribute again - should revert
+        vm.deal(contributor2, 0.5 ether);
+        vm.prank(contributor2);
+        vm.expectRevert(CrowdFunding.CampaignNotActive.selector);
+        crowdFunding.contribute{value: 0.5 ether}(campaignId);
+    }
+    
+    function test_RevertContributeERC20AfterGoalReached() public {
+        // Create ERC20 campaign
+        vm.prank(owner);
+        uint256 campaignId = crowdFunding.createCampaign(
+            "Test ERC20 Campaign",
+            "Test Description",
+            beneficiary,
+            100 * 10**18,
+            30,
+            address(mockToken)
+        );
+        
+        // Contribute exactly the funding goal
+        vm.prank(contributor1);
+        mockToken.approve(address(crowdFunding), 100 * 10**18);
+        
+        vm.prank(contributor1);
+        crowdFunding.contributeERC20(campaignId, 100 * 10**18);
+        
+        // Verify campaign is successful
+        (,,,,,,,CrowdFunding.CampaignStatus status,) = crowdFunding.getCampaignDetails(campaignId);
+        assertEq(uint256(status), uint256(CrowdFunding.CampaignStatus.Successful));
+        
+        // Try to contribute again - should revert
+        vm.prank(contributor2);
+        mockToken.approve(address(crowdFunding), 50 * 10**18);
+        
+        vm.prank(contributor2);
+        vm.expectRevert(CrowdFunding.CampaignNotActive.selector);
+        crowdFunding.contributeERC20(campaignId, 50 * 10**18);
+    }
 }
