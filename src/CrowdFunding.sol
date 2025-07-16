@@ -9,15 +9,15 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 /// @dev Supports project creation, donations, automatic refunds, and platform fee collection
 /// @author Intuipay Team
 contract CrowdFunding is Ownable {
-    /// @notice Project status enumeration
-    enum ProjectStatus {
+    /// @notice Campaign status enumeration
+    enum CampaignStatus {
         Active,     // Active fundraising
         Successful, // Fundraising successful
         Failed      // Fundraising failed
     }
     
-    /// @notice Project structure
-    struct Project {
+    /// @notice Campaign structure
+    struct Campaign {
         uint256 id;
         string title;
         string description;
@@ -25,15 +25,15 @@ contract CrowdFunding is Ownable {
         uint256 fundingGoal;         // Target amount
         uint256 deadline;            // Deadline timestamp
         uint256 currentAmount;       // Current raised amount
-        ProjectStatus status;
+        CampaignStatus status;
         address tokenAddress;        // Token address (address(0) for native token)
         mapping(address => uint256) contributions; // Contribution records
         address[] contributors;      // Contributors list
     }
     
     /// @notice State variables
-    mapping(uint256 => Project) public projects;
-    uint256 public projectCount;
+    mapping(uint256 => Campaign) public campaigns;
+    uint256 public campaignCount;
     
     /// @notice Platform fee configuration
     address public platformAddress;
@@ -41,8 +41,8 @@ contract CrowdFunding is Ownable {
     uint256 public constant PERCENTAGE_BASE = 10000;
     
     /// @notice Events
-    event ProjectCreated(
-        uint256 indexed projectId,
+    event CampaignCreated(
+        uint256 indexed campaignId,
         string title,
         address indexed beneficiary,
         uint256 fundingGoal,
@@ -51,28 +51,28 @@ contract CrowdFunding is Ownable {
     );
     
     event ContributionMade(
-        uint256 indexed projectId,
+        uint256 indexed campaignId,
         address indexed contributor,
         uint256 amount
     );
     
-    event ProjectSuccessful(
-        uint256 indexed projectId,
+    event CampaignSuccessful(
+        uint256 indexed campaignId,
         uint256 totalAmount
     );
     
-    event ProjectFailed(
-        uint256 indexed projectId
+    event CampaignFailed(
+        uint256 indexed campaignId
     );
     
     event RefundIssued(
-        uint256 indexed projectId,
+        uint256 indexed campaignId,
         address indexed contributor,
         uint256 amount
     );
     
     event FundsWithdrawn(
-        uint256 indexed projectId,
+        uint256 indexed campaignId,
         address indexed beneficiary,
         uint256 netAmount,
         uint256 platformFee
@@ -92,11 +92,11 @@ contract CrowdFunding is Ownable {
     error InvalidAddress();
     error InvalidAmount();
     error TransferFailed();
-    error ProjectNotFound();
-    error ProjectNotActive();
-    error ProjectDeadlinePassed();
-    error ProjectNotSuccessful();
-    error ProjectNotFailed();
+    error CampaignNotFound();
+    error CampaignNotActive();
+    error CampaignDeadlinePassed();
+    error CampaignNotSuccessful();
+    error CampaignNotFailed();
     error OnlyBeneficiaryCanWithdraw();
     error NoContributionFound();
     error NoFundsToWithdraw();
@@ -118,14 +118,14 @@ contract CrowdFunding is Ownable {
         _;
     }
     
-    modifier projectExists(uint256 _projectId) {
-        if (_projectId == 0 || _projectId > projectCount) revert ProjectNotFound();
+    modifier campaignExists(uint256 _campaignId) {
+        if (_campaignId == 0 || _campaignId > campaignCount) revert CampaignNotFound();
         _;
     }
     
-    modifier projectActive(uint256 _projectId) {
-        if (projects[_projectId].status != ProjectStatus.Active) revert ProjectNotActive();
-        if (block.timestamp >= projects[_projectId].deadline) revert ProjectDeadlinePassed();
+    modifier campaignActive(uint256 _campaignId) {
+        if (campaigns[_campaignId].status != CampaignStatus.Active) revert CampaignNotActive();
+        if (block.timestamp >= campaigns[_campaignId].deadline) revert CampaignDeadlinePassed();
         _;
     }
     
@@ -158,14 +158,14 @@ contract CrowdFunding is Ownable {
         emit PlatformFeePercentageUpdated(oldFeePercentage, _newFeePercentage);
     }
     
-    /// @notice Creates a new project
-    /// @param _title Project title
-    /// @param _description Project description
+    /// @notice Creates a new campaign
+    /// @param _title Campaign title
+    /// @param _description Campaign description
     /// @param _fundingGoal Target funding amount
     /// @param _durationInDays Duration in days
     /// @param _tokenAddress Token address (address(0) for native token)
-    /// @return projectId The created project ID
-    function createProject(
+    /// @return campaignId The created campaign ID
+    function createCampaign(
         string memory _title,
         string memory _description,
         uint256 _fundingGoal,
@@ -174,22 +174,22 @@ contract CrowdFunding is Ownable {
     ) external onlyValidAmount(_fundingGoal) returns (uint256) {
         if (_durationInDays == 0) revert InvalidDuration();
         
-        projectCount++;
+        campaignCount++;
         uint256 deadline = block.timestamp + (_durationInDays * 1 days);
         
-        Project storage newProject = projects[projectCount];
-        newProject.id = projectCount;
-        newProject.title = _title;
-        newProject.description = _description;
-        newProject.beneficiary = payable(msg.sender);
-        newProject.fundingGoal = _fundingGoal;
-        newProject.deadline = deadline;
-        newProject.currentAmount = 0;
-        newProject.status = ProjectStatus.Active;
-        newProject.tokenAddress = _tokenAddress;
+        Campaign storage newCampaign = campaigns[campaignCount];
+        newCampaign.id = campaignCount;
+        newCampaign.title = _title;
+        newCampaign.description = _description;
+        newCampaign.beneficiary = payable(msg.sender);
+        newCampaign.fundingGoal = _fundingGoal;
+        newCampaign.deadline = deadline;
+        newCampaign.currentAmount = 0;
+        newCampaign.status = CampaignStatus.Active;
+        newCampaign.tokenAddress = _tokenAddress;
         
-        emit ProjectCreated(
-            projectCount,
+        emit CampaignCreated(
+            campaignCount,
             _title,
             msg.sender,
             _fundingGoal,
@@ -197,55 +197,55 @@ contract CrowdFunding is Ownable {
             _tokenAddress
         );
         
-        return projectCount;
+        return campaignCount;
     }
     
-    /// @notice Contributes to a project (native token)
-    /// @param _projectId The project ID to contribute to
-    function contribute(uint256 _projectId) 
+    /// @notice Contributes to a campaign (native token)
+    /// @param _campaignId The campaign ID to contribute to
+    function contribute(uint256 _campaignId) 
         external 
         payable 
-        projectExists(_projectId) 
-        projectActive(_projectId) 
+        campaignExists(_campaignId) 
+        campaignActive(_campaignId) 
         onlyValidAmount(msg.value)
     {
-        Project storage project = projects[_projectId];
+        Campaign storage campaign = campaigns[_campaignId];
         
-        // Check if project accepts native token
-        if (project.tokenAddress != address(0)) revert InvalidTokenAddress();
+        // Check if campaign accepts native token
+        if (campaign.tokenAddress != address(0)) revert InvalidTokenAddress();
         
         // If it's a new contributor, add to the list
-        if (project.contributions[msg.sender] == 0) {
-            project.contributors.push(msg.sender);
+        if (campaign.contributions[msg.sender] == 0) {
+            campaign.contributors.push(msg.sender);
         }
         
-        project.contributions[msg.sender] += msg.value;
-        project.currentAmount += msg.value;
+        campaign.contributions[msg.sender] += msg.value;
+        campaign.currentAmount += msg.value;
         
-        emit ContributionMade(_projectId, msg.sender, msg.value);
+        emit ContributionMade(_campaignId, msg.sender, msg.value);
         
         // Check if funding goal is reached
-        if (project.currentAmount >= project.fundingGoal) {
-            project.status = ProjectStatus.Successful;
-            emit ProjectSuccessful(_projectId, project.currentAmount);
+        if (campaign.currentAmount >= campaign.fundingGoal) {
+            campaign.status = CampaignStatus.Successful;
+            emit CampaignSuccessful(_campaignId, campaign.currentAmount);
         }
     }
     
-    /// @notice Contributes to a project (ERC20 token)
-    /// @param _projectId The project ID to contribute to
+    /// @notice Contributes to a campaign (ERC20 token)
+    /// @param _campaignId The campaign ID to contribute to
     /// @param _amount The amount to contribute
-    function contributeERC20(uint256 _projectId, uint256 _amount) 
+    function contributeERC20(uint256 _campaignId, uint256 _amount) 
         external 
-        projectExists(_projectId) 
-        projectActive(_projectId) 
+        campaignExists(_campaignId) 
+        campaignActive(_campaignId) 
         onlyValidAmount(_amount)
     {
-        Project storage project = projects[_projectId];
+        Campaign storage campaign = campaigns[_campaignId];
         
-        // Check if project accepts ERC20 token
-        if (project.tokenAddress == address(0)) revert InvalidTokenAddress();
+        // Check if campaign accepts ERC20 token
+        if (campaign.tokenAddress == address(0)) revert InvalidTokenAddress();
         
-        IERC20 token = IERC20(project.tokenAddress);
+        IERC20 token = IERC20(campaign.tokenAddress);
         
         // Check user's token balance
         if (token.balanceOf(msg.sender) < _amount) revert InsufficientBalance();
@@ -258,74 +258,74 @@ contract CrowdFunding is Ownable {
         if (!success) revert TransferFailed();
         
         // If it's a new contributor, add to the list
-        if (project.contributions[msg.sender] == 0) {
-            project.contributors.push(msg.sender);
+        if (campaign.contributions[msg.sender] == 0) {
+            campaign.contributors.push(msg.sender);
         }
         
-        project.contributions[msg.sender] += _amount;
-        project.currentAmount += _amount;
+        campaign.contributions[msg.sender] += _amount;
+        campaign.currentAmount += _amount;
         
-        emit ContributionMade(_projectId, msg.sender, _amount);
+        emit ContributionMade(_campaignId, msg.sender, _amount);
         
         // Check if funding goal is reached
-        if (project.currentAmount >= project.fundingGoal) {
-            project.status = ProjectStatus.Successful;
-            emit ProjectSuccessful(_projectId, project.currentAmount);
+        if (campaign.currentAmount >= campaign.fundingGoal) {
+            campaign.status = CampaignStatus.Successful;
+            emit CampaignSuccessful(_campaignId, campaign.currentAmount);
         }
     }
     
-    /// @notice Checks and updates project status
-    /// @param _projectId The project ID to check
-    function checkProjectStatus(uint256 _projectId) 
+    /// @notice Checks and updates campaign status
+    /// @param _campaignId The campaign ID to check
+    function checkCampaignStatus(uint256 _campaignId) 
         external 
-        projectExists(_projectId) 
+        campaignExists(_campaignId) 
     {
-        Project storage project = projects[_projectId];
+        Campaign storage campaign = campaigns[_campaignId];
         
-        if (project.status == ProjectStatus.Active && 
-            block.timestamp >= project.deadline) {
+        if (campaign.status == CampaignStatus.Active && 
+            block.timestamp >= campaign.deadline) {
             
-            if (project.currentAmount >= project.fundingGoal) {
-                project.status = ProjectStatus.Successful;
-                emit ProjectSuccessful(_projectId, project.currentAmount);
+            if (campaign.currentAmount >= campaign.fundingGoal) {
+                campaign.status = CampaignStatus.Successful;
+                emit CampaignSuccessful(_campaignId, campaign.currentAmount);
             } else {
-                project.status = ProjectStatus.Failed;
-                emit ProjectFailed(_projectId);
+                campaign.status = CampaignStatus.Failed;
+                emit CampaignFailed(_campaignId);
             }
         }
     }
     
-    /// @notice Withdraws funds (called by beneficiary after project success)
-    /// @param _projectId The project ID to withdraw from
-    function withdrawFunds(uint256 _projectId) 
+    /// @notice Withdraws funds (called by beneficiary after campaign success)
+    /// @param _campaignId The campaign ID to withdraw from
+    function withdrawFunds(uint256 _campaignId) 
         external 
-        projectExists(_projectId) 
+        campaignExists(_campaignId) 
     {
-        Project storage project = projects[_projectId];
-        if (project.status != ProjectStatus.Successful) revert ProjectNotSuccessful();
-        if (msg.sender != project.beneficiary) revert OnlyBeneficiaryCanWithdraw();
-        if (project.currentAmount == 0) revert NoFundsToWithdraw();
+        Campaign storage campaign = campaigns[_campaignId];
+        if (campaign.status != CampaignStatus.Successful) revert CampaignNotSuccessful();
+        if (msg.sender != campaign.beneficiary) revert OnlyBeneficiaryCanWithdraw();
+        if (campaign.currentAmount == 0) revert NoFundsToWithdraw();
         
-        uint256 totalAmount = project.currentAmount;
+        uint256 totalAmount = campaign.currentAmount;
         uint256 platformFee = (totalAmount * platformFeePercentage) / PERCENTAGE_BASE;
         uint256 beneficiaryAmount = totalAmount - platformFee;
         
         // Reset amount to prevent reentrancy
-        project.currentAmount = 0;
+        campaign.currentAmount = 0;
         
-        if (project.tokenAddress == address(0)) {
+        if (campaign.tokenAddress == address(0)) {
             // Native token transfer
-            (bool beneficiarySuccess, ) = project.beneficiary.call{value: beneficiaryAmount}("");
+            (bool beneficiarySuccess, ) = campaign.beneficiary.call{value: beneficiaryAmount}("");
             if (!beneficiarySuccess) revert TransferFailed();
             
             (bool platformSuccess, ) = platformAddress.call{value: platformFee}("");
             if (!platformSuccess) revert TransferFailed();
         } else {
             // ERC20 token transfer
-            IERC20 token = IERC20(project.tokenAddress);
+            IERC20 token = IERC20(campaign.tokenAddress);
             
             // Transfer to beneficiary
-            bool beneficiarySuccess = token.transfer(project.beneficiary, beneficiaryAmount);
+            bool beneficiarySuccess = token.transfer(campaign.beneficiary, beneficiaryAmount);
             if (!beneficiarySuccess) revert TransferFailed();
             
             // Transfer platform fee
@@ -333,51 +333,51 @@ contract CrowdFunding is Ownable {
             if (!platformSuccess) revert TransferFailed();
         }
         
-        emit FundsWithdrawn(_projectId, project.beneficiary, beneficiaryAmount, platformFee);
+        emit FundsWithdrawn(_campaignId, campaign.beneficiary, beneficiaryAmount, platformFee);
     }
     
-    /// @notice Requests refund (called by contributors after project failure)
-    /// @param _projectId The project ID to request refund from
-    function requestRefund(uint256 _projectId) 
+    /// @notice Requests refund (called by contributors after campaign failure)
+    /// @param _campaignId The campaign ID to request refund from
+    function requestRefund(uint256 _campaignId) 
         external 
-        projectExists(_projectId) 
+        campaignExists(_campaignId) 
     {
-        Project storage project = projects[_projectId];
-        if (project.status != ProjectStatus.Failed) revert ProjectNotFailed();
-        if (project.contributions[msg.sender] == 0) revert NoContributionFound();
+        Campaign storage campaign = campaigns[_campaignId];
+        if (campaign.status != CampaignStatus.Failed) revert CampaignNotFailed();
+        if (campaign.contributions[msg.sender] == 0) revert NoContributionFound();
         
-        uint256 refundAmount = project.contributions[msg.sender];
-        project.contributions[msg.sender] = 0;
+        uint256 refundAmount = campaign.contributions[msg.sender];
+        campaign.contributions[msg.sender] = 0;
         
-        if (project.tokenAddress == address(0)) {
+        if (campaign.tokenAddress == address(0)) {
             // Native token refund
             (bool success, ) = payable(msg.sender).call{value: refundAmount}("");
             if (!success) revert TransferFailed();
         } else {
             // ERC20 token refund
-            IERC20 token = IERC20(project.tokenAddress);
+            IERC20 token = IERC20(campaign.tokenAddress);
             bool success = token.transfer(msg.sender, refundAmount);
             if (!success) revert TransferFailed();
         }
         
-        emit RefundIssued(_projectId, msg.sender, refundAmount);
+        emit RefundIssued(_campaignId, msg.sender, refundAmount);
     }
     
-    /// @notice Gets project details
-    /// @param _projectId The project ID
-    /// @return id Project ID
-    /// @return title Project title
-    /// @return description Project description
+    /// @notice Gets campaign details
+    /// @param _campaignId The campaign ID
+    /// @return id Campaign ID
+    /// @return title Campaign title
+    /// @return description Campaign description
     /// @return beneficiary Beneficiary address
     /// @return fundingGoal Funding goal amount
-    /// @return deadline Project deadline timestamp
+    /// @return deadline Campaign deadline timestamp
     /// @return currentAmount Current raised amount
-    /// @return status Project status
+    /// @return status Campaign status
     /// @return contributorsCount Number of contributors
-    function getProjectDetails(uint256 _projectId) 
+    function getCampaignDetails(uint256 _campaignId) 
         external 
         view 
-        projectExists(_projectId) 
+        campaignExists(_campaignId) 
         returns (
             uint256 id,
             string memory title,
@@ -386,47 +386,47 @@ contract CrowdFunding is Ownable {
             uint256 fundingGoal,
             uint256 deadline,
             uint256 currentAmount,
-            ProjectStatus status,
+            CampaignStatus status,
             uint256 contributorsCount
         ) 
     {
-        Project storage project = projects[_projectId];
+        Campaign storage campaign = campaigns[_campaignId];
         return (
-            project.id,
-            project.title,
-            project.description,
-            project.beneficiary,
-            project.fundingGoal,
-            project.deadline,
-            project.currentAmount,
-            project.status,
-            project.contributors.length
+            campaign.id,
+            campaign.title,
+            campaign.description,
+            campaign.beneficiary,
+            campaign.fundingGoal,
+            campaign.deadline,
+            campaign.currentAmount,
+            campaign.status,
+            campaign.contributors.length
         );
     }
     
-    /// @notice Gets user's contribution to a specific project
-    /// @param _projectId The project ID
+    /// @notice Gets user's contribution to a specific campaign
+    /// @param _campaignId The campaign ID
     /// @param _contributor The contributor address
     /// @return The contribution amount
-    function getUserContribution(uint256 _projectId, address _contributor) 
+    function getUserContribution(uint256 _campaignId, address _contributor) 
         external 
         view 
-        projectExists(_projectId) 
+        campaignExists(_campaignId) 
         returns (uint256) 
     {
-        return projects[_projectId].contributions[_contributor];
+        return campaigns[_campaignId].contributions[_contributor];
     }
     
-    /// @notice Gets all contributors of a project
-    /// @param _projectId The project ID
+    /// @notice Gets all contributors of a campaign
+    /// @param _campaignId The campaign ID
     /// @return Array of contributor addresses
-    function getProjectContributors(uint256 _projectId) 
+    function getCampaignContributors(uint256 _campaignId) 
         external 
         view 
-        projectExists(_projectId) 
+        campaignExists(_campaignId) 
         returns (address[] memory) 
     {
-        return projects[_projectId].contributors;
+        return campaigns[_campaignId].contributors;
     }
     
     /// @notice Calculates platform fee and net amount

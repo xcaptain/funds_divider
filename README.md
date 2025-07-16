@@ -17,11 +17,11 @@ EVM转账有2种形式，native token transfer 和 ERC20 token transfer
 
 CrowdFunding 合约为大学和科研机构提供基于区块链的捐款平台，支持：
 
-- 🎯 **项目创建**: 机构可以创建募资项目，设定目标金额和期限
-- 💰 **智能捐款**: 用户可以向感兴趣的项目进行捐款
-- 🔄 **自动状态管理**: 自动检查项目是否达成目标或超过期限
-- 💸 **资金提取**: 成功项目的资金自动转给受益人（扣除平台费用）
-- 🔄 **退款机制**: 失败项目的捐款自动退还给用户
+- 🎯 **活动创建**: 机构可以创建募资活动，设定目标金额和期限
+- 💰 **智能捐款**: 用户可以向感兴趣的活动进行捐款（支持 ETH 和 ERC20 代币）
+- 🔄 **自动状态管理**: 自动检查活动是否达成目标或超过期限
+- 💸 **资金提取**: 成功活动的资金自动转给受益人（扣除平台费用）
+- 🔄 **退款机制**: 失败活动的捐款自动退还给用户
 - 🛡️ **安全保障**: 防重入攻击、权限控制、全面的参数验证
 
 ### 主要特性
@@ -31,14 +31,15 @@ CrowdFunding 合约为大学和科研机构提供基于区块链的捐款平台�
 - 基于 Solidity 0.8.13 开发，内置溢出检查
 - 模块化设计，易于维护和升级
 
-#### 📊 项目管理
-- 项目状态：Active（活跃）、Successful（成功）、Failed（失败）
-- 详细的项目信息存储：标题、描述、受益人、目标金额、截止时间
+#### 📊 活动管理
+- 活动状态：Active（活跃）、Successful（成功）、Failed（失败）
+- 详细的活动信息存储：标题、描述、受益人、目标金额、截止时间、代币类型
 - 贡献者记录和贡献金额追踪
+- 支持 ETH 和 ERC20 代币捐款
 
 #### 💰 费用机制
 - 可配置的平台费用（默认 2.5%）
-- 仅在项目成功时收取费用
+- 仅在活动成功时收取费用
 - 透明的费用计算和分配
 
 #### 🔒 安全措施
@@ -49,11 +50,11 @@ CrowdFunding 合约为大学和科研机构提供基于区块链的捐款平台�
 
 ### 使用流程
 
-1. **创建项目**: 机构调用 `createProject()` 创建募资项目
-2. **用户捐款**: 用户调用 `contribute()` 向项目捐款
-3. **状态检查**: 任何人可调用 `checkProjectStatus()` 检查项目状态
-4. **成功提取**: 项目成功后，受益人调用 `withdrawFunds()` 提取资金
-5. **失败退款**: 项目失败后，捐款人调用 `requestRefund()` 申请退款
+1. **创建活动**: 机构调用 `createCampaign()` 创建募资活动
+2. **用户捐款**: 用户调用 `contribute()` 或 `contributeERC20()` 向活动捐款
+3. **状态检查**: 任何人可调用 `checkCampaignStatus()` 检查活动状态
+4. **成功提取**: 活动成功后，受益人调用 `withdrawFunds()` 提取资金
+5. **失败退款**: 活动失败后，捐款人调用 `requestRefund()` 申请退款
 
 ### 管理功能
 
@@ -63,9 +64,9 @@ CrowdFunding 合约为大学和科研机构提供基于区块链的捐款平台�
 
 ### 查询功能
 
-- `getProjectDetails()`: 获取项目详细信息
-- `getUserContribution()`: 查询用户对特定项目的捐款
-- `getProjectContributors()`: 获取项目所有捐款人
+- `getCampaignDetails()`: 获取活动详细信息
+- `getUserContribution()`: 查询用户对特定活动的捐款
+- `getCampaignContributors()`: 获取活动所有捐款人
 - `calculateAmounts()`: 计算平台费用和净金额
 
 ## 部署
@@ -115,7 +116,8 @@ forge test --match-contract CrowdFundingTest -vv
 forge test --match-contract IntuipayFundsDividerTest -vv
 
 # 运行特定测试函数
-forge test --match-test test_CreateProject -vv
+forge test --match-test test_CreateCampaign -vv
+forge test --match-test test_ContributeERC20 -vv
 ```
 
 ## 已部署的网络
