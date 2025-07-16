@@ -25,6 +25,6 @@ contract CrowdFundingScript is Script {
         console.log("CrowdFunding deployed to:", address(crowdFunding));
         console.log("Owner:", crowdFunding.owner());
         console.log("Platform Address:", crowdFunding.platformAddress());
-        console.log("Platform Fee Percentage:", crowdFunding.platformFeePercentage(), "(", crowdFunding.platformFeePercentage() / 100, "%)");
+        // console.log("Platform Fee Percentage:", crowdFunding.platformFeePercentage(), "(", crowdFunding.platformFeePercentage() / 100, "%)");
     }
 }

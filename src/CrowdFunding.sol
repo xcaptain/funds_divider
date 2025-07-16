@@ -26,6 +26,7 @@ contract CrowdFunding is Ownable {
         uint256 deadline;            // Deadline timestamp
         uint256 currentAmount;       // Current raised amount
         ProjectStatus status;
+        address tokenAddress;        // Token address (address(0) for native token)
         mapping(address => uint256) contributions; // Contribution records
         address[] contributors;      // Contributors list
     }
@@ -45,7 +46,8 @@ contract CrowdFunding is Ownable {
         string title,
         address indexed beneficiary,
         uint256 fundingGoal,
-        uint256 deadline
+        uint256 deadline,
+        address indexed tokenAddress
     );
     
     event ContributionMade(
@@ -101,6 +103,9 @@ contract CrowdFunding is Ownable {
     error InvalidFeePercentage();
     error InvalidDuration();
     error InvalidFundingGoal();
+    error InsufficientBalance();
+    error InsufficientAllowance();
+    error InvalidTokenAddress();
     
     /// @notice Modifiers
     modifier onlyValidAddress(address addr) {
@@ -158,12 +163,14 @@ contract CrowdFunding is Ownable {
     /// @param _description Project description
     /// @param _fundingGoal Target funding amount
     /// @param _durationInDays Duration in days
+    /// @param _tokenAddress Token address (address(0) for native token)
     /// @return projectId The created project ID
     function createProject(
         string memory _title,
         string memory _description,
         uint256 _fundingGoal,
-        uint256 _durationInDays
+        uint256 _durationInDays,
+        address _tokenAddress
     ) external onlyValidAmount(_fundingGoal) returns (uint256) {
         if (_durationInDays == 0) revert InvalidDuration();
         
@@ -179,19 +186,21 @@ contract CrowdFunding is Ownable {
         newProject.deadline = deadline;
         newProject.currentAmount = 0;
         newProject.status = ProjectStatus.Active;
+        newProject.tokenAddress = _tokenAddress;
         
         emit ProjectCreated(
             projectCount,
             _title,
             msg.sender,
             _fundingGoal,
-            deadline
+            deadline,
+            _tokenAddress
         );
         
         return projectCount;
     }
     
-    /// @notice Contributes to a project
+    /// @notice Contributes to a project (native token)
     /// @param _projectId The project ID to contribute to
     function contribute(uint256 _projectId) 
         external 
@@ -202,6 +211,9 @@ contract CrowdFunding is Ownable {
     {
         Project storage project = projects[_projectId];
         
+        // Check if project accepts native token
+        if (project.tokenAddress != address(0)) revert InvalidTokenAddress();
+        
         // If it's a new contributor, add to the list
         if (project.contributions[msg.sender] == 0) {
             project.contributors.push(msg.sender);
@@ -211,6 +223,49 @@ contract CrowdFunding is Ownable {
         project.currentAmount += msg.value;
         
         emit ContributionMade(_projectId, msg.sender, msg.value);
+        
+        // Check if funding goal is reached
+        if (project.currentAmount >= project.fundingGoal) {
+            project.status = ProjectStatus.Successful;
+            emit ProjectSuccessful(_projectId, project.currentAmount);
+        }
+    }
+    
+    /// @notice Contributes to a project (ERC20 token)
+    /// @param _projectId The project ID to contribute to
+    /// @param _amount The amount to contribute
+    function contributeERC20(uint256 _projectId, uint256 _amount) 
+        external 
+        projectExists(_projectId) 
+        projectActive(_projectId) 
+        onlyValidAmount(_amount)
+    {
+        Project storage project = projects[_projectId];
+        
+        // Check if project accepts ERC20 token
+        if (project.tokenAddress == address(0)) revert InvalidTokenAddress();
+        
+        IERC20 token = IERC20(project.tokenAddress);
+        
+        // Check user's token balance
+        if (token.balanceOf(msg.sender) < _amount) revert InsufficientBalance();
+        
+        // Check allowance
+        if (token.allowance(msg.sender, address(this)) < _amount) revert InsufficientAllowance();
+        
+        // Transfer tokens from user to contract
+        bool success = token.transferFrom(msg.sender, address(this), _amount);
+        if (!success) revert TransferFailed();
+        
+        // If it's a new contributor, add to the list
+        if (project.contributions[msg.sender] == 0) {
+            project.contributors.push(msg.sender);
+        }
+        
+        project.contributions[msg.sender] += _amount;
+        project.currentAmount += _amount;
+        
+        emit ContributionMade(_projectId, msg.sender, _amount);
         
         // Check if funding goal is reached
         if (project.currentAmount >= project.fundingGoal) {
@@ -258,13 +313,25 @@ contract CrowdFunding is Ownable {
         // Reset amount to prevent reentrancy
         project.currentAmount = 0;
         
-        // Transfer to beneficiary
-        (bool beneficiarySuccess, ) = project.beneficiary.call{value: beneficiaryAmount}("");
-        if (!beneficiarySuccess) revert TransferFailed();
-        
-        // Transfer platform fee
-        (bool platformSuccess, ) = platformAddress.call{value: platformFee}("");
-        if (!platformSuccess) revert TransferFailed();
+        if (project.tokenAddress == address(0)) {
+            // Native token transfer
+            (bool beneficiarySuccess, ) = project.beneficiary.call{value: beneficiaryAmount}("");
+            if (!beneficiarySuccess) revert TransferFailed();
+            
+            (bool platformSuccess, ) = platformAddress.call{value: platformFee}("");
+            if (!platformSuccess) revert TransferFailed();
+        } else {
+            // ERC20 token transfer
+            IERC20 token = IERC20(project.tokenAddress);
+            
+            // Transfer to beneficiary
+            bool beneficiarySuccess = token.transfer(project.beneficiary, beneficiaryAmount);
+            if (!beneficiarySuccess) revert TransferFailed();
+            
+            // Transfer platform fee
+            bool platformSuccess = token.transfer(platformAddress, platformFee);
+            if (!platformSuccess) revert TransferFailed();
+        }
         
         emit FundsWithdrawn(_projectId, project.beneficiary, beneficiaryAmount, platformFee);
     }
@@ -282,8 +349,16 @@ contract CrowdFunding is Ownable {
         uint256 refundAmount = project.contributions[msg.sender];
         project.contributions[msg.sender] = 0;
         
-        (bool success, ) = payable(msg.sender).call{value: refundAmount}("");
-        if (!success) revert TransferFailed();
+        if (project.tokenAddress == address(0)) {
+            // Native token refund
+            (bool success, ) = payable(msg.sender).call{value: refundAmount}("");
+            if (!success) revert TransferFailed();
+        } else {
+            // ERC20 token refund
+            IERC20 token = IERC20(project.tokenAddress);
+            bool success = token.transfer(msg.sender, refundAmount);
+            if (!success) revert TransferFailed();
+        }
         
         emit RefundIssued(_projectId, msg.sender, refundAmount);
     }
