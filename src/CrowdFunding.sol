@@ -158,9 +158,10 @@ contract CrowdFunding is Ownable {
         emit PlatformFeePercentageUpdated(oldFeePercentage, _newFeePercentage);
     }
     
-    /// @notice Creates a new campaign
+    /// @notice Creates a new campaign (only admin can create)
     /// @param _title Campaign title
     /// @param _description Campaign description
+    /// @param _beneficiary Campaign beneficiary (university/institution address)
     /// @param _fundingGoal Target funding amount
     /// @param _durationInDays Duration in days
     /// @param _tokenAddress Token address (address(0) for native token)
@@ -168,10 +169,11 @@ contract CrowdFunding is Ownable {
     function createCampaign(
         string memory _title,
         string memory _description,
+        address _beneficiary,
         uint256 _fundingGoal,
         uint256 _durationInDays,
         address _tokenAddress
-    ) external onlyValidAmount(_fundingGoal) returns (uint256) {
+    ) external onlyOwner onlyValidAddress(_beneficiary) onlyValidAmount(_fundingGoal) returns (uint256) {
         if (_durationInDays == 0) revert InvalidDuration();
         
         campaignCount++;
@@ -181,7 +183,7 @@ contract CrowdFunding is Ownable {
         newCampaign.id = campaignCount;
         newCampaign.title = _title;
         newCampaign.description = _description;
-        newCampaign.beneficiary = payable(msg.sender);
+        newCampaign.beneficiary = payable(_beneficiary);
         newCampaign.fundingGoal = _fundingGoal;
         newCampaign.deadline = deadline;
         newCampaign.currentAmount = 0;
@@ -191,7 +193,7 @@ contract CrowdFunding is Ownable {
         emit CampaignCreated(
             campaignCount,
             _title,
-            msg.sender,
+            _beneficiary,
             _fundingGoal,
             deadline,
             _tokenAddress

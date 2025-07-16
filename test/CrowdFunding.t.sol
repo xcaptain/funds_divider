@@ -91,11 +91,12 @@ contract CrowdFundingNewTest is Test {
     }
     
     function test_CreateCampaign() public {
-        vm.prank(beneficiary);
+        vm.prank(owner);
         
         uint256 campaignId = crowdFunding.createCampaign(
             "Test Campaign",
             "Test Description",
+            beneficiary,
             1 ether,
             30,
             address(0) // Native token
@@ -129,10 +130,11 @@ contract CrowdFundingNewTest is Test {
     
     function test_ContributeNative() public {
         // Create campaign first
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test Campaign",
             "Test Description",
+            beneficiary,
             1 ether,
             30,
             address(0) // Native token
@@ -154,10 +156,11 @@ contract CrowdFundingNewTest is Test {
     
     function test_ContributeERC20() public {
         // Create ERC20 campaign
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test ERC20 Campaign",
             "Test Description",
+            beneficiary,
             100 * 10**18, // 100 tokens
             30,
             address(mockToken)
@@ -181,10 +184,11 @@ contract CrowdFundingNewTest is Test {
     
     function test_CampaignSuccess() public {
         // Create campaign
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test Campaign",
             "Test Description",
+            beneficiary,
             1 ether,
             30,
             address(0) // Native token
@@ -202,10 +206,11 @@ contract CrowdFundingNewTest is Test {
     
     function test_WithdrawFundsNative() public {
         // Create campaign
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test Campaign",
             "Test Description",
+            beneficiary,
             1 ether,
             30,
             address(0) // Native token
@@ -240,10 +245,11 @@ contract CrowdFundingNewTest is Test {
     
     function test_WithdrawFundsERC20() public {
         // Create ERC20 campaign
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test ERC20 Campaign",
             "Test Description",
+            beneficiary,
             100 * 10**18,
             30,
             address(mockToken)
@@ -280,10 +286,11 @@ contract CrowdFundingNewTest is Test {
     
     function test_CampaignFailure() public {
         // Create campaign
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test Campaign",
             "Test Description",
+            beneficiary,
             1 ether,
             30,
             address(0) // Native token
@@ -306,10 +313,11 @@ contract CrowdFundingNewTest is Test {
     
     function test_RequestRefundNative() public {
         // Create campaign
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test Campaign",
             "Test Description",
+            beneficiary,
             1 ether,
             30,
             address(0) // Native token
@@ -338,10 +346,11 @@ contract CrowdFundingNewTest is Test {
     
     function test_RequestRefundERC20() public {
         // Create ERC20 campaign
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test ERC20 Campaign",
             "Test Description",
+            beneficiary,
             100 * 10**18,
             30,
             address(mockToken)
@@ -405,15 +414,21 @@ contract CrowdFundingNewTest is Test {
     }
     
     function test_RevertInvalidFundingGoal() public {
-        vm.prank(beneficiary);
+        vm.prank(owner);
         vm.expectRevert(CrowdFunding.InvalidAmount.selector);
-        crowdFunding.createCampaign("Test", "Test", 0, 30, address(0));
+        crowdFunding.createCampaign("Test", "Test", beneficiary, 0, 30, address(0));
     }
     
     function test_RevertInvalidDuration() public {
-        vm.prank(beneficiary);
+        vm.prank(owner);
         vm.expectRevert(CrowdFunding.InvalidDuration.selector);
-        crowdFunding.createCampaign("Test", "Test", 1 ether, 0, address(0));
+        crowdFunding.createCampaign("Test", "Test", beneficiary, 1 ether, 0, address(0));
+    }
+    
+    function test_RevertNonOwnerCreateCampaign() public {
+        vm.prank(beneficiary);
+        vm.expectRevert();
+        crowdFunding.createCampaign("Test", "Test", beneficiary, 1 ether, 30, address(0));
     }
     
     function test_RevertContributeToNonExistentCampaign() public {
@@ -424,8 +439,8 @@ contract CrowdFundingNewTest is Test {
     }
     
     function test_RevertContributeZeroAmount() public {
-        vm.prank(beneficiary);
-        uint256 campaignId = crowdFunding.createCampaign("Test", "Test", 1 ether, 30, address(0));
+        vm.prank(owner);
+        uint256 campaignId = crowdFunding.createCampaign("Test", "Test", beneficiary, 1 ether, 30, address(0));
         
         vm.prank(contributor1);
         vm.expectRevert(CrowdFunding.InvalidAmount.selector);
@@ -433,10 +448,11 @@ contract CrowdFundingNewTest is Test {
     }
     
     function test_RevertContributeNativeToERC20Campaign() public {
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test ERC20 Campaign",
             "Test Description",
+            beneficiary,
             100 * 10**18,
             30,
             address(mockToken)
@@ -449,10 +465,11 @@ contract CrowdFundingNewTest is Test {
     }
     
     function test_RevertContributeERC20ToNativeCampaign() public {
-        vm.prank(beneficiary);
+        vm.prank(owner);
         uint256 campaignId = crowdFunding.createCampaign(
             "Test Native Campaign",
-            "Test Description", 
+            "Test Description",
+            beneficiary,
             1 ether,
             30,
             address(0)
