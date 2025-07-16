@@ -21,7 +21,7 @@ contract CrowdFunding is Ownable {
         uint256 id;
         string title;
         string description;
-        address payable beneficiary;  // University/institution receiving address
+        address beneficiary;  // University/institution receiving address
         uint256 fundingGoal;         // Target amount
         uint256 deadline;            // Deadline timestamp
         uint256 currentAmount;       // Current raised amount
@@ -183,7 +183,7 @@ contract CrowdFunding is Ownable {
         newCampaign.id = campaignCount;
         newCampaign.title = _title;
         newCampaign.description = _description;
-        newCampaign.beneficiary = payable(_beneficiary);
+        newCampaign.beneficiary = _beneficiary;
         newCampaign.fundingGoal = _fundingGoal;
         newCampaign.deadline = deadline;
         newCampaign.currentAmount = 0;
@@ -317,10 +317,10 @@ contract CrowdFunding is Ownable {
         
         if (campaign.tokenAddress == address(0)) {
             // Native token transfer
-            (bool beneficiarySuccess, ) = campaign.beneficiary.call{value: beneficiaryAmount}("");
+            (bool beneficiarySuccess, ) = payable(campaign.beneficiary).call{value: beneficiaryAmount}("");
             if (!beneficiarySuccess) revert TransferFailed();
             
-            (bool platformSuccess, ) = platformAddress.call{value: platformFee}("");
+            (bool platformSuccess, ) = payable(platformAddress).call{value: platformFee}("");
             if (!platformSuccess) revert TransferFailed();
         } else {
             // ERC20 token transfer

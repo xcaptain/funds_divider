@@ -17,7 +17,7 @@ EVM转账有2种形式，native token transfer 和 ERC20 token transfer
 
 CrowdFunding 合约为大学和科研机构提供基于区块链的捐款平台，支持：
 
-- 🎯 **活动创建**: 机构可以创建募资活动，设定目标金额和期限
+- 🎯 **活动创建**: 管理员可以为机构创建募资活动，设定目标金额和期限
 - 💰 **智能捐款**: 用户可以向感兴趣的活动进行捐款（支持 ETH 和 ERC20 代币）
 - 🔄 **自动状态管理**: 自动检查活动是否达成目标或超过期限
 - 💸 **资金提取**: 成功活动的资金自动转给受益人（扣除平台费用）
@@ -50,7 +50,7 @@ CrowdFunding 合约为大学和科研机构提供基于区块链的捐款平台�
 
 ### 使用流程
 
-1. **创建活动**: 机构调用 `createCampaign()` 创建募资活动
+1. **创建活动**: 管理员调用 `createCampaign()` 为机构创建募资活动
 2. **用户捐款**: 用户调用 `contribute()` 或 `contributeERC20()` 向活动捐款
 3. **状态检查**: 任何人可调用 `checkCampaignStatus()` 检查活动状态
 4. **成功提取**: 活动成功后，受益人调用 `withdrawFunds()` 提取资金
@@ -58,6 +58,7 @@ CrowdFunding 合约为大学和科研机构提供基于区块链的捐款平台�
 
 ### 管理功能
 
+- `createCampaign()`: 管理员创建新的募资活动（仅管理员）
 - `updatePlatformAddress()`: 更新平台费用接收地址
 - `updatePlatformFeePercentage()`: 更新平台费用比例
 - `emergencyWithdraw()`: 紧急情况下提取合约资金

@@ -65,7 +65,7 @@ contract MockERC20 is IERC20 {
     }
 }
 
-contract CrowdFundingNewTest is Test {
+contract CrowdFundingTest is Test {
     CrowdFunding public crowdFunding;
     MockERC20 public mockToken;
     address public owner = address(1);
