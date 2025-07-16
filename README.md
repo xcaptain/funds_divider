@@ -12,6 +12,9 @@ source .env
 
 # 部署和验证
 forge script --chain sepolia script/IntuipayFundsDivider.s.sol:DeployIntuipayFundsDivider --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+
+# 部署到 edu-testnet
+forge script script/IntuipayFundsDivider.s.sol:DeployIntuipayFundsDivider --broadcast --verify -vvvv --rpc-url https://rpc.open-campus-codex.gelato.digital
 ```
 
 ## 更新 abi 文件
@@ -25,3 +28,4 @@ cat out/IntuipayFundsDivider.sol/IntuipayFundsDivider.json | jq ".abi" > Intuipa
 | 区块链网络 | 合约地址 | 手续费地址 | 管理员地址 |
 | --- | --- | --- | --- |
 | Ethereum Sepolia | [0xfeec3028af62b78e0d54f650063e1800ac7dfd98](https://sepolia.etherscan.io/address/0xfeec3028af62b78e0d54f650063e1800ac7dfd98) | 0x720aC46FdB6da28FA751bc60AfB8094290c2B4b7 | 0x7e727520B29773e7F23a8665649197aAf064CeF1 |
+| Pharos Testnet | [0x6c81708c36A37D0CF527fF9b0a2eC98249a84257](https://testnet.pharosscan.xyz/address/0x6c81708c36a37d0cf527ff9b0a2ec98249a84257) | 0x6c81708c36a37d0cf527ff9b0a2ec98249a84257 |
