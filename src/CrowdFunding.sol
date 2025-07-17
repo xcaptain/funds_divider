@@ -37,7 +37,7 @@ contract CrowdFunding is Ownable {
     
     /// @notice Platform fee configuration
     address public platformAddress;
-    uint256 public platformFeePercentage = 250; // Default 2.5% (250/10000)
+    uint256 public platformFeePercentage = 300; // Default 3% (300/10000)
     uint256 public constant PERCENTAGE_BASE = 10000;
     
     /// @notice Events
