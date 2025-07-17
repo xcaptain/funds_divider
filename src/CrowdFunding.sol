@@ -97,7 +97,6 @@ contract CrowdFunding is Ownable {
     error CampaignDeadlinePassed();
     error CampaignNotSuccessful();
     error CampaignNotFailed();
-    error OnlyBeneficiaryCanWithdraw();
     error NoContributionFound();
     error NoFundsToWithdraw();
     error InvalidFeePercentage();
@@ -297,7 +296,7 @@ contract CrowdFunding is Ownable {
         }
     }
     
-    /// @notice Withdraws funds (called by beneficiary after campaign success)
+    /// @notice Withdraws funds (can be called by anyone after campaign success)
     /// @param _campaignId The campaign ID to withdraw from
     function withdrawFunds(uint256 _campaignId) 
         external 
@@ -305,7 +304,6 @@ contract CrowdFunding is Ownable {
     {
         Campaign storage campaign = campaigns[_campaignId];
         if (campaign.status != CampaignStatus.Successful) revert CampaignNotSuccessful();
-        if (msg.sender != campaign.beneficiary) revert OnlyBeneficiaryCanWithdraw();
         if (campaign.currentAmount == 0) revert NoFundsToWithdraw();
         
         uint256 totalAmount = campaign.currentAmount;

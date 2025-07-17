@@ -284,6 +284,45 @@ contract CrowdFundingTest is Test {
         assertEq(currentAmount, 0);
     }
     
+    function test_WithdrawFundsByAnyone() public {
+        // Create campaign
+        vm.prank(owner);
+        uint256 campaignId = crowdFunding.createCampaign(
+            "Test Campaign",
+            "Test Description",
+            beneficiary,
+            1 ether,
+            30,
+            address(0) // Native token
+        );
+        
+        // Contribute to make it successful
+        vm.deal(contributor1, 1 ether);
+        vm.prank(contributor1);
+        crowdFunding.contribute{value: 1 ether}(campaignId);
+        
+        // Check initial balances
+        uint256 initialBeneficiaryBalance = beneficiary.balance;
+        uint256 initialPlatformBalance = platformAddress.balance;
+        
+        // Withdraw funds using a different address (not beneficiary)
+        vm.prank(contributor1); // Using contributor1 instead of beneficiary
+        crowdFunding.withdrawFunds(campaignId);
+        
+        // Calculate expected amounts
+        uint256 totalAmount = 1 ether;
+        uint256 platformFee = (totalAmount * 250) / 10000; // 2.5%
+        uint256 netAmount = totalAmount - platformFee;
+        
+        // Check balances - funds should still go to beneficiary
+        assertEq(beneficiary.balance, initialBeneficiaryBalance + netAmount);
+        assertEq(platformAddress.balance, initialPlatformBalance + platformFee);
+        
+        // Check campaign current amount is reset
+        (,,,,,,uint256 currentAmount,,) = crowdFunding.getCampaignDetails(campaignId);
+        assertEq(currentAmount, 0);
+    }
+
     function test_CampaignFailure() public {
         // Create campaign
         vm.prank(owner);
